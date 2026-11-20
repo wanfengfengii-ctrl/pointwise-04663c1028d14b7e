@@ -1,0 +1,29 @@
+{
+  "old_threshold": 20,
+  "new_threshold": 10,
+  "partitions": [["A", "east"], ["B", "west"]],
+  "batches": [["A", "seed-a", [["x", 8]]], ["B", "seed-b", [["x", 13], ["keep", 25]]]],
+  "report_id": "before-change",
+  "request_id": "night-limit",
+  "first_mount": "A",
+  "edits": [["edit-a", "A", "x", 8, 12], ["edit-b", "B", "x", 13, 9]],
+  "second_mount": "B",
+  "delete_after_publish": ["delete-a", "A", "x", 12, null],
+  "v1": {
+    "mounts": [["A", 1, [["x", 8]]], ["B", 4, [["keep", 25], ["x", 9]]]],
+    "edit_facts": [3, 4],
+    "opening_deltas": [[1, 2, "B", 1, 25]],
+    "resumed_deltas": [],
+    "resumed_cursor": 1,
+    "live": [20, 1, 25],
+    "frozen": [20, 2, 1, 25]
+  },
+  "v2": {
+    "fact_cut": 4,
+    "position": 2,
+    "before": [20, 1, 25],
+    "after": [10, 2, 37],
+    "after_delete": [10, 1, 25],
+    "delete_delta": [3, 5, "A", -1, -12]
+  }
+}
