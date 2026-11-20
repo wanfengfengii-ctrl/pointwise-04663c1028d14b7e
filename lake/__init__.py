@@ -30,3 +30,8 @@ from lake.reports.history import FrozenReport as FrozenReport
 from lake.reports.history import read_frozen as read_frozen
 from lake.reports.rollup import LiveTotals as LiveTotals
 from lake.reports.rollup import read_live as read_live
+from lake.threshold.changes import FeedThresholdChange as FeedThresholdChange
+from lake.threshold.changes import ThresholdChange as ThresholdChange
+from lake.threshold.requests import collect_threshold_partition as collect_threshold_partition
+from lake.threshold.requests import publish_threshold as publish_threshold
+from lake.threshold.requests import request_threshold as request_threshold

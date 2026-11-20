@@ -46,4 +46,31 @@ with open_warehouse('shift-warehouse') as warehouse:
 
 原批和勘误通过落盘主库与相关附加卷的同一事务提交。事务失败时，行、回执、卷覆盖、现行汇总及应发差额一起回滚。签发使用同一写事务读出全仓截点并保存固定件。仓库目录在关闭会话后可整体搬运，主库和卷目录需一同保留。
 
-确定性故障检查可通过 `open_warehouse` 的 `before_commit(operation)` 和 `after_scan_row(partition_id, row)` 参数中断真实事务或实读。标记分别为 `register_partition`、`load_batch`、`correct_row` 和 `freeze`。前者在实际写入后、提交前调用，后者在每次卷扫描取得一行后调用。回归使用独立临时仓，期望值来自手算或明确的不变量。
+确定性故障检查可通过 `open_warehouse` 的 `before_commit(operation)` 和 `after_scan_row(partition_id, row)` 参数中断真实事务或实读。标记分别为 `register_partition`、`load_batch`、`correct_row`、`freeze` 和 `publish_threshold`。前者在实际写入后、提交前调用，后者在每次卷扫描取得一行后调用。回归使用独立临时仓，期望值来自手算或明确的不变量。
+
+## 分班验卷后的阈值换版
+
+`THRESHOLD.md` 规定的换版接口同样从 `lake` 导出，申请号使用独立命名空间：
+
+```python
+from lake import (
+    FeedThresholdChange, ThresholdChange,
+    collect_threshold_partition, publish_threshold, request_threshold,
+)
+
+request_threshold(warehouse, 'night-limit', 10)
+covered_through = collect_threshold_partition(warehouse, 'night-limit', 'A')
+change = publish_threshold(warehouse, 'night-limit')  # 未齐返回 None
+```
+
+- 同一仓同时只允许一单在办。登记时固定当时已有的全部分区，待办期间只允许复领既有分区绑定，新增分区报 `ValueError`。同号同阈值在办返回 `None`、已发返回首次 `ThresholdChange`；同号异阈值或另有在办时登记新号报 `ValueError`。
+- `collect_threshold_partition` 走原独占挂载实读，返回该次实读的 `covered_through`；同申请同区重领已验覆盖号（发布后也可重领），空卷同样要验收。挂载忙、读取失败沿用 `MountBusy`、`MountReadError`，失败不留部分结果、可重试。
+- 发布在一个写事务内按发布事务所见事实截点重算各卷：`before`/`after` 是同一事实截点上按旧、新阈值核算的全仓 `LiveTotals`，旧口径零差额但影响新口径的勘误也计入。在用阈值、全部分区汇总和占一个报送位置的换版条目同时生效；`fact_cut` 不推进事实号。
+- `read_feed` 在普通 `FeedEntry` 之间按 `position` 交付 `FeedThresholdChange`（内含 `ThresholdChange`）。换版前的条目按旧阈值解释，读到换版条目后凭 `after` 接续，即使新旧口径相等也交付该条目。旧日表仍按冻结值领取，新日表使用签发时的在用口径。
+- 未齐返回待办；发布失败经 `before_commit` 的 `publish_threshold` 标记在真实写入后、提交前中断，原账、已验进度和期间已提交的原批、勘误全部保留，重开仓库可续办。
+
+整班换版演示（20 L 到 10 L，随后删除 12 L 行接收 −1 笔、−12 L）：
+
+```sh
+python3 -B threshold_demo.py samples/threshold-change.json
+```

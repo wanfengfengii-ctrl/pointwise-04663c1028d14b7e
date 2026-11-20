@@ -26,6 +26,16 @@ def read_threshold(db):
     return decode_liters(record[0])
 
 
+def write_threshold(db, threshold):
+    require_liters(threshold)
+    result = db.execute(
+        'UPDATE warehouse_threshold SET liters = ? WHERE singleton = 1',
+        (encode_liters(threshold),),
+    )
+    if result.rowcount != 1:
+        raise RuntimeError('warehouse threshold is missing')
+
+
 def contribution(liters, threshold):
     if liters is not None and liters >= threshold:
         return 1, liters

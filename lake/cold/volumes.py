@@ -4,7 +4,9 @@ from pathlib import Path
 
 from lake.cold.checks import check_volume_binding
 from lake.cold.coverage import init_coverage
-from lake.corrections.unit_of_work import configure_durable, open_connection, write_transaction
+from lake.corrections.unit_of_work import (
+    configure_durable, open_connection, read_transaction, write_transaction,
+)
 from lake.partitions.source_rows import SourceRow, decode_liters, encode_liters, init_source_rows, require_name
 
 
@@ -98,3 +100,37 @@ class VolumePort:
                 yield SourceRow(row_id, decode_liters(encoded))
         finally:
             records.close()
+
+    def summarize_volume(self, binding, old_threshold, new_threshold):
+        """Read a volume through its own connection and qualify rows at two thresholds.
+
+        The publish caller already holds the main write lock; volume writes only
+        commit inside a main write transaction, so these facts cannot move while
+        the publish transaction is open.
+        """
+        with closing(self.open_for_read(binding.volume_ref)) as volume_db:
+            with read_transaction(volume_db):
+                check_volume_binding(
+                    volume_db, binding.partition_id, binding.volume_ref,
+                )
+                records = volume_db.execute('''
+                    SELECT CASE WHEN edit.row_id IS NULL THEN original.liters ELSE edit.liters END
+                    FROM main.source_rows AS original
+                    LEFT JOIN main.row_edits AS edit USING (row_id)
+                    WHERE edit.row_id IS NULL OR edit.liters IS NOT NULL
+                    ORDER BY original.row_id
+                ''')
+                old_count = old_liters = 0
+                new_count = new_liters = 0
+                try:
+                    for (encoded,) in records:
+                        liters = decode_liters(encoded)
+                        if liters >= old_threshold:
+                            old_count += 1
+                            old_liters += liters
+                        if liters >= new_threshold:
+                            new_count += 1
+                            new_liters += liters
+                finally:
+                    records.close()
+        return old_count, old_liters, new_count, new_liters

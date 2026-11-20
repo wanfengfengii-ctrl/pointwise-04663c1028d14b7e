@@ -68,11 +68,14 @@ def register_partition(warehouse, partition_id, volume_ref):
         existing = _check_registration(db, binding)
         if existing is not None:
             return existing
+        from lake.threshold.requests import reject_new_partition_while_pending
+        reject_new_partition_while_pending(db)
         with warehouse.volumes.attach_volume(db, volume_ref, create=True):
             with write_transaction(db, 'register_partition', warehouse.before_commit):
                 existing = _check_registration(db, binding)
                 if existing is not None:
                     return existing
+                reject_new_partition_while_pending(db)
                 warehouse.volumes.initialize_volume(db, partition_id, volume_ref)
                 db.execute(
                     'INSERT INTO partitions (partition_id, volume_ref) VALUES (?, ?)',

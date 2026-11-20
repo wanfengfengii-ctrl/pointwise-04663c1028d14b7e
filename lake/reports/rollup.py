@@ -47,6 +47,16 @@ def apply_delta(db, partition_id, delta):
     ''', (partition_id, encode_liters(count), encode_liters(liters)))
 
 
+def replace_totals(db, partition_id, count, liters):
+    if count < 0 or liters < 0 or (count == 0 and liters != 0):
+        raise RuntimeError('invalid partition totals after recomputation')
+    db.execute('''
+        INSERT INTO partition_rollups (partition_id, qualified_count, liters) VALUES (?, ?, ?)
+        ON CONFLICT (partition_id) DO UPDATE SET
+            qualified_count = excluded.qualified_count, liters = excluded.liters
+    ''', (partition_id, encode_liters(count), encode_liters(liters)))
+
+
 def read_totals(db, partition_id=None):
     threshold = read_threshold(db)
     if partition_id is not None:

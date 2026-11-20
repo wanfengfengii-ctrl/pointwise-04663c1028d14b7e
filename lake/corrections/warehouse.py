@@ -13,6 +13,7 @@ from lake.partitions.source_rows import require_liters
 from lake.reports.history import init_frozen_history
 from lake.reports.qualification import init_threshold
 from lake.reports.rollup import init_rollups
+from lake.threshold.requests import init_threshold_workflow
 
 
 class Warehouse:
@@ -36,6 +37,7 @@ class Warehouse:
             init_rollups(self.db)
             init_frozen_history(self.db)
             init_feed(self.db)
+            init_threshold_workflow(self.db)
 
     def close(self):
         self.db.close()
